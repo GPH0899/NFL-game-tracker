@@ -11,6 +11,8 @@
   "dependencies": {
     "axios": "^1.12.2",
     "dotenv": "^17.2.2",
+    "framer-motion": "^12.23.18",
+    "json-formatter-js": "^2.5.23",
     "next": "15.5.3",
     "react": "19.1.0",
     "react-dom": "19.1.0"

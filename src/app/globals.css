@@ -24,7 +24,24 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+/* Dark scrollbar for Chrome, Edge, Safari */
+::-webkit-scrollbar {
+  width: 12px;
+  background: #18181b;
+}
+::-webkit-scrollbar-thumb {
+  background: #444;
+  border-radius: 6px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #666;
+}
 
+/* Firefox */
+* {
+  scrollbar-color: #444 #18181b;
+  scrollbar-width: thin;
+}
 /* Custom animations for modal */
 @keyframes fadeIn {
   from {
