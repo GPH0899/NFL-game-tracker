@@ -8,7 +8,7 @@ A modern web application that connects to the NFL API on RapidAPI to display rea
 
 - 🏈 Real-time NFL game status tracking
 - 📊 Live play-by-play updates
-- 🎲 Random game selection from current games
+- 🎲 Select and view any current NFL game
 - ⏱️ Auto-refresh every 30 seconds
 - 🎨 Modern UI with Tailwind CSS
 - 🌑 Dark mode scrollbars for a seamless experience
