@@ -1,6 +1,8 @@
+
 # NFL Game Tracker
 
-A lightweight web application that connects to the NFL API on RapidAPI to display real-time game status and play-by-play data for in-play events.
+A modern web application that connects to the NFL API on RapidAPI to display real-time game status, play-by-play data, and advanced game details. Features include dark mode scrollbars, a wider modal for game details, and optimized React code for performance.
+
 
 ## Features
 
@@ -9,7 +11,10 @@ A lightweight web application that connects to the NFL API on RapidAPI to displa
 - 🎲 Random game selection from current games
 - ⏱️ Auto-refresh every 30 seconds
 - 🎨 Modern UI with Tailwind CSS
-- 📱 Responsive design
+- 🌑 Dark mode scrollbars for a seamless experience
+- �️ Wider modal for detailed game info
+- ⚡ Optimized React codebase for performance
+- �📱 Responsive design
 
 ## Setup Instructions
 
@@ -27,32 +32,31 @@ npm install
 
 ### 3. Configure Environment
 
+
 Create a `.env.local` file in the root directory:
 
 ```bash
-RAPIDAPI_KEY=your-rapidapi-key-here
+NEXT_PUBLIC_RAPIDAPI_KEY=your-rapidapi-key-here
+NEXT_PUBLIC_RAPIDAPI_HOST=nfl-api-data.p.rapidapi.com
 ```
+
 
 ### 4. Run the Application
 
-#### Development Mode (Both Frontend and Backend)
+#### Development Mode
 ```bash
-npm run dev:full
-```
-
-#### Or run separately:
-```bash
-# Terminal 1 - Backend Server
-npm run server
-
-# Terminal 2 - Frontend
 npm run dev
+```
+#### Production Mode
+```bash
+npm run build
+npm run start
 ```
 
 ### 5. Access the Application
 
 - Frontend: http://localhost:3000
-- Backend API: http://localhost:3001
+
 
 ## API Endpoints
 
@@ -60,13 +64,14 @@ npm run dev
 - `GET /api/games/random-current` - Get a random current game with details
 - `GET /api/games/:gameId` - Get specific game details
 
+
 ## Tech Stack
 
 - **Frontend**: Next.js 15, React 19, TypeScript
-- **Backend**: Express.js, Node.js
 - **Styling**: Tailwind CSS
 - **API**: RapidAPI NFL API
 - **HTTP Client**: Axios
+
 
 ## Project Structure
 
@@ -75,24 +80,27 @@ nfl-game-tracker/
 ├── src/
 │   └── app/
 │       └── page.tsx          # Main game tracker component
-├── server.js                 # Express backend server
+├── public/                   # Static assets
 ├── package.json
 └── README.md
 ```
 
+
 ## Usage
 
-1. Click "Get Random Current Game" to fetch a random NFL game
-2. The app will display:
+1. Click "Get Games" to fetch NFL games for a selected date
+2. Click on a game card to view detailed modal with:
    - Game status (Live, Timeout, Halftime, Final)
    - Team names and scores
    - Current quarter and time
    - Recent plays with player information
+   - Odds and other game data
 3. The app automatically refreshes every 30 seconds
+
 
 ## Notes
 
 - The app filters for games that are currently in progress, recently finished, or in timeout
 - Player names and numbers are displayed when available
 - The UI is fully responsive and works on mobile devices
-- All API calls are made through the Express backend to avoid CORS issues
+- Scrollbars are styled for dark mode
