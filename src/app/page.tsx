@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import JSONFormatter from 'json-formatter-js';
 import { motion, AnimatePresence } from 'framer-motion';
+import Image from 'next/image';
 
 const RAPIDAPI_KEY = process.env.NEXT_PUBLIC_RAPIDAPI_KEY;
 const RAPIDAPI_HOST = process.env.NEXT_PUBLIC_RAPIDAPI_HOST;
@@ -157,9 +157,51 @@ interface GamesResponse {
   }[];
   events: Game[];
 }
-function formatDuration(seconds: any) {
-  if (seconds == null || Number.isNaN(seconds)) return "—";
-  const s = Math.max(0, Math.floor(seconds));
+
+interface Play {
+  sequenceNumber?: number | string;
+  wallclock?: string;
+  period?: { number?: number };
+  clock?: { displayValue?: string };
+  type?: { text?: string; alternativeText?: string };
+  shortText?: string;
+  shortAlternativeText?: string;
+}
+
+interface RawPlaysResponse {
+  items?: Play[];
+  plays?: Play[];
+  [key: string]: unknown;
+}
+
+interface Unified {
+  gameId: string;
+  isStoppage: boolean;
+  confidence: string;
+  stoppageReason: string | null;
+  stoppageDurationSeconds: number | null;
+  stoppageDurationPretty: string;
+  gameStatus: string;
+  lastPlaySummary: string;
+  totalPlays: number;
+}
+
+interface SelectedGame {
+  unified: Unified;
+  gameData: RawPlaysResponse & Record<string, unknown>;
+  odds?: unknown;
+  competitions?: Competition[];
+}
+
+type JSONFormatterInstance = {
+  render: () => HTMLElement;
+};
+
+type JSONFormatterConstructor = new (obj: unknown, depth?: number, opts?: Record<string, unknown>) => JSONFormatterInstance;
+
+function formatDuration(seconds: number | null | undefined) {
+  if (seconds == null || Number.isNaN(seconds as number)) return "—";
+  const s = Math.max(0, Math.floor(seconds as number));
   const m = Math.floor(s / 60);
   const r = s % 60;
   return m > 0 ? `${m}m ${r}s` : `${r}s`;
@@ -180,7 +222,7 @@ function isExplicitStoppage(playTypeText = "", shortText = "") {
   );
 }
 
-function inferStoppageFromPlays(plays: any) {
+function inferStoppageFromPlays(plays: Play[]) {
   if (!Array.isArray(plays) || plays.length === 0) {
     return {
       isStoppage: false,
@@ -241,8 +283,8 @@ function inferStoppageFromPlays(plays: any) {
   };
 }
 
-function toUnifiedResponse(gameId: any, raw: any) {
-  const plays = raw?.items || raw?.plays || [];
+function toUnifiedResponse(gameId: string, raw: RawPlaysResponse | null) {
+  const plays: Play[] = (raw?.items as Play[] | undefined) || (raw?.plays as Play[] | undefined) || [];
   const inf = inferStoppageFromPlays(plays);
   return {
     gameId,
@@ -262,14 +304,14 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
-  const [selectedGame, setSelectedGame] = useState<any | null>(null);
+  const [selectedGame, setSelectedGame] = useState<SelectedGame | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showRaw, setShowRaw] = useState(false);
   const [showPlays, setShowPlays] = useState(false);
   const [showOtherData, setShowOtherData] = useState(false);
-  const [rawDataFormatter, setRawDataFormatter] = useState<any>(null);
-  const [otherDataFormatter, setOtherDataFormatter] = useState<any>(null);
-  const [oddsFormatter, setOddsFormatter] = useState<any>(null);
+  const [rawDataFormatter, setRawDataFormatter] = useState<JSONFormatterInstance | null>(null);
+  const [otherDataFormatter, setOtherDataFormatter] = useState<JSONFormatterInstance | null>(null);
+  const [oddsFormatter, setOddsFormatter] = useState<JSONFormatterInstance | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isModalLoading, setIsModalLoading] = useState(false);
   const [showOdds, setShowOdds] = useState(false);
@@ -313,7 +355,23 @@ export default function Home() {
   // No automatic fetching on mount - user must click button
 
   const handleGameClick = async (game: Game) => {
-    setSelectedGame({ ...game });
+    // Set a temporary SelectedGame so modal can open immediately with basic info
+    setSelectedGame({
+      unified: {
+        gameId: game.id,
+        isStoppage: false,
+        confidence: 'low',
+        stoppageReason: null,
+        stoppageDurationSeconds: null,
+        stoppageDurationPretty: '—',
+        gameStatus: '',
+        lastPlaySummary: '',
+        totalPlays: 0,
+      },
+      gameData: {},
+      odds: null,
+      competitions: game.competitions,
+    });
     setIsModalLoading(true);
     setIsModalOpen(true);
 
@@ -405,35 +463,16 @@ export default function Home() {
     if (selectedGame?.gameData) {
       const { gameData, odds } = selectedGame;
 
-      try {
-        // Create formatter for raw game data
-        const rawFormatter = new JSONFormatter(gameData, 1, {
-          theme: 'dark',
-          hoverPreviewEnabled: true,
-          hoverPreviewArrayCount: 100,
-          hoverPreviewFieldCount: 5,
-          animateOpen: true,
-          animateClose: true
-        });
+      let mounted = true;
 
-        // Create formatter for other data (excluding items)
-        const otherData = Object.fromEntries(
-          Object.entries(gameData).filter(([key]) => key !== 'items')
-        );
+      (async () => {
+        try {
+          const mod = (await import('json-formatter-js')) as unknown;
+          const modTyped = mod as { default?: unknown };
+          const JSONFormatter = (typeof modTyped.default === 'function' ? (modTyped.default as unknown) : (mod as unknown)) as unknown as JSONFormatterConstructor;
 
-        const otherFormatter = new JSONFormatter(otherData, 1, {
-          theme: 'dark',
-          hoverPreviewEnabled: true,
-          hoverPreviewArrayCount: 100,
-          hoverPreviewFieldCount: 5,
-          animateOpen: true,
-          animateClose: true
-        });
-
-        // Create formatter for odds data
-        let oddsFormatter = null;
-        if (odds) {
-          oddsFormatter = new JSONFormatter(odds, 1, {
+          // Create formatter for raw game data
+          const rawFormatter = new JSONFormatter(gameData, 1, {
             theme: 'dark',
             hoverPreviewEnabled: true,
             hoverPreviewArrayCount: 100,
@@ -441,14 +480,46 @@ export default function Home() {
             animateOpen: true,
             animateClose: true
           });
-        }
 
-        setRawDataFormatter(rawFormatter);
-        setOtherDataFormatter(otherFormatter);
-        setOddsFormatter(oddsFormatter);
-      } catch (error) {
-        console.error('Error creating formatters:', error);
-      }
+          // Create formatter for other data (excluding items)
+          const otherData = Object.fromEntries(
+            Object.entries(gameData).filter(([key]) => key !== 'items')
+          );
+
+          const otherFormatter = new JSONFormatter(otherData, 1, {
+            theme: 'dark',
+            hoverPreviewEnabled: true,
+            hoverPreviewArrayCount: 100,
+            hoverPreviewFieldCount: 5,
+            animateOpen: true,
+            animateClose: true
+          });
+
+          // Create formatter for odds data
+          let oddsFormatterLocal: JSONFormatterInstance | null = null;
+          if (odds) {
+            oddsFormatterLocal = new JSONFormatter(odds, 1, {
+              theme: 'dark',
+              hoverPreviewEnabled: true,
+              hoverPreviewArrayCount: 100,
+              hoverPreviewFieldCount: 5,
+              animateOpen: true,
+              animateClose: true
+            });
+          }
+
+          if (!mounted) return;
+          setRawDataFormatter(rawFormatter as JSONFormatterInstance);
+          setOtherDataFormatter(otherFormatter as JSONFormatterInstance);
+          setOddsFormatter(oddsFormatterLocal as JSONFormatterInstance | null);
+        } catch (error) {
+          console.error('Error creating formatters:', error);
+        }
+      })();
+
+      return () => {
+        mounted = false;
+      };
     }
   }, [selectedGame]);
 
@@ -590,9 +661,11 @@ export default function Home() {
                         {/* Away Team */}
                         <div className="flex items-center justify-between">
                           <div className="flex items-center space-x-3">
-                            <img
-                              src={awayTeam?.logo}
-                              alt={awayTeam?.displayName}
+                            <Image
+                              src={awayTeam?.logo || ''}
+                              alt={awayTeam?.displayName || ''}
+                              width={32}
+                              height={32}
                               className="w-8 h-8"
                             />
                             <span className="text-white font-medium">
@@ -607,9 +680,11 @@ export default function Home() {
                         {/* Home Team */}
                         <div className="flex items-center justify-between">
                           <div className="flex items-center space-x-3">
-                            <img
-                              src={homeTeam?.logo}
-                              alt={homeTeam?.displayName}
+                            <Image
+                              src={homeTeam?.logo || ''}
+                              alt={homeTeam?.displayName || ''}
+                              width={32}
+                              height={32}
                               className="w-8 h-8"
                             />
                             <span className="text-white font-medium">
@@ -767,14 +842,14 @@ export default function Home() {
                               <div>
                                 <span className="text-gray-400">Date:</span>
                                 <span className="text-white ml-2">
-                                  {new Date(competition?.date).toLocaleDateString('en-US', {
+                                  {competition?.date ? new Date(competition.date).toLocaleDateString('en-US', {
                                     weekday: 'long',
                                     year: 'numeric',
                                     month: 'long',
                                     day: 'numeric',
                                     hour: '2-digit',
                                     minute: '2-digit'
-                                  })}
+                                  }) : 'Unknown date'}
                                 </span>
                               </div>
                               <div>
@@ -801,9 +876,11 @@ export default function Home() {
                               {/* Away Team */}
                               <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
                                 <div className="flex items-center space-x-3">
-                                  <img
-                                    src={awayTeam?.team.logo}
-                                    alt={awayTeam?.team.displayName}
+                                  <Image
+                                    src={awayTeam?.team.logo || ''}
+                                    alt={awayTeam?.team.displayName || ''}
+                                    width={48}
+                                    height={48}
                                     className="w-12 h-12"
                                   />
                                   <div>
@@ -824,9 +901,11 @@ export default function Home() {
                               {/* Home Team */}
                               <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
                                 <div className="flex items-center space-x-3">
-                                  <img
-                                    src={homeTeam?.team.logo}
-                                    alt={homeTeam?.team.displayName}
+                                  <Image
+                                    src={homeTeam?.team.logo || ''}
+                                    alt={homeTeam?.team.displayName || ''}
+                                    width={48}
+                                    height={48}
                                     className="w-12 h-12"
                                   />
                                   <div>
@@ -856,9 +935,11 @@ export default function Home() {
                                     <h5 className="text-white font-medium mb-2">{leader.displayName}</h5>
                                     {leader.leaders.map((player, playerIndex) => (
                                       <div key={playerIndex} className="flex items-center space-x-2">
-                                        <img
-                                          src={player.athlete.headshot}
-                                          alt={player.athlete.displayName}
+                                        <Image
+                                          src={player.athlete.headshot || ''}
+                                          alt={player.athlete.displayName || ''}
+                                          width={32}
+                                          height={32}
                                           className="w-8 h-8 rounded-full"
                                         />
                                         <div className="flex-1">
@@ -900,7 +981,7 @@ export default function Home() {
                           {/* Collapsible Game Data Sections */}
                           <div className="space-y-4">
                             {/* Odds Data */}
-                            {selectedGame.odds && (
+                            {selectedGame?.odds != null && (
                               <div className="bg-white/5 rounded-lg p-4">
                                 <button
                                   onClick={() => setShowOdds(prev => !prev)}
@@ -986,7 +1067,7 @@ export default function Home() {
                                 {showPlays && (
                                   <div className="mt-4">
                                     <div className="space-y-2 max-h-96 overflow-y-auto">
-                                      {gameData.items.map((play: any, index: number) => (
+                                      {gameData.items.map((play: Play, index: number) => (
                                         <div key={index} className="bg-black/50 p-3 rounded text-xs">
                                           <div className="flex justify-between items-start mb-2">
                                             <span className="text-blue-400 font-medium">
